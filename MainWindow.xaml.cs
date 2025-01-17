@@ -15,7 +15,7 @@ using System.Threading;
 using Windows.Storage;
 using Windows.Storage.Streams;
 
-namespace SreenCaptureVideoWPF {
+namespace ScreenCaptureVideoWPF {
 	/// <summary>
 	/// Interaction logic for MainWindow.xaml
 	/// </summary>
