@@ -1,0 +1,21 @@
+﻿<Window x:Class="SreenCaptureVideoWPF.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:SreenCaptureVideoWPF"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+	<Grid>
+		<Grid.ColumnDefinitions>
+			<ColumnDefinition Width="400" />
+		</Grid.ColumnDefinitions>
+		<Grid x:Name="ControlsGrid" Grid.Column="0">
+			<Button x:Name="start_button" HorizontalAlignment="Left" VerticalAlignment="Top" Background="DarkGray" Margin="5" Padding="5" FontSize="12" Content="StartCapture"  Click="StartCaptureButton_Click" />
+			<Button x:Name="stop_button" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="DarkGray" Margin="5" Padding="5" FontSize="12" Content="StopCapture" Click="StopCaptureButton_Click" />
+			<Button x:Name="screenshot_button" HorizontalAlignment="Left" VerticalAlignment="Center" Background="DarkGray" Margin="5" Padding="5" FontSize="12" Content="TakeScreenshot" />
+			<!--<Button x:Name="start_button" HorizontalAlignment="Left" VerticalAlignment="Top" Background="DarkGray" Margin="5" Padding="5" FontSize="12" Content="StartCapture" Click="Button_ClickAsync"/>
+			<Button x:Name="stop_button" HorizontalAlignment="Left" VerticalAlignment="Center" Background="DarkGray" Margin="5" Padding="5" FontSize="12" Content="TakeScreenshot" Click="ScreenshotButton_ClickAsync"/>-->
+		</Grid>
+	</Grid>
+</Window>
