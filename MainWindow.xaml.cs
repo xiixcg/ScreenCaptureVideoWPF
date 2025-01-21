@@ -14,9 +14,11 @@ using Windows.Media.Transcoding;
 using System.Threading;
 using Windows.Storage;
 using Windows.Storage.Streams;
+using System.Windows.Interop;
 
 namespace ScreenCaptureVideoWPF {
 	/// <summary>
+	/// 
 	/// Interaction logic for MainWindow.xaml
 	/// </summary>
 	public partial class MainWindow : Window {
@@ -30,6 +32,7 @@ namespace ScreenCaptureVideoWPF {
 		private Compositor _compositor;
 		private CompositionDrawingSurface _surface;
 
+		private IntPtr hwnd;
 		private IDirect3DDevice _device;
 		private Device _sharpDxD3dDevice;
 		private List<GraphicsCaptureItem> _captureItems;
@@ -53,7 +56,28 @@ namespace ScreenCaptureVideoWPF {
 			if(_items == null) {
 				_items = new List<GraphicsCaptureItem>();
 			}
-			Task setup = SetupEncoding();
+
+			// Force graphicscapture.dll to load.
+			var picker = new GraphicsCapturePicker();
+			//Task setup = SetupEncoding();
+		}
+
+		private void Window_Loaded(object sender, RoutedEventArgs e) {
+			CoreMessagingHelper.CreateDispatcherQueueControllerForCurrentThread();
+			var interopWindow = new WindowInteropHelper(this);
+			hwnd = interopWindow.Handle;
+			var presentationSource = PresentationSource.FromVisual(this);
+			double dpiX = 1.0;
+			double dpiY = 1.0;
+			if(presentationSource != null) {
+				dpiX = presentationSource.CompositionTarget.TransformToDevice.M11;
+				dpiY = presentationSource.CompositionTarget.TransformToDevice.M22;
+			}
+			var controlsWidth = (float) (ControlsGrid.ActualWidth * dpiX);
+
+			//InitComposition(controlsWidth);
+			//InitWindowList();
+			//InitMonitorList();
 		}
 
 		//// TODO: having trouble getting monitors due to comimport issue with UWP
@@ -87,6 +111,7 @@ namespace ScreenCaptureVideoWPF {
 			try {
 				//Let the user pick an item to capture
 				var picker = new GraphicsCapturePicker();
+				picker.SetWindow(hwnd);
 				_captureItem = await picker.PickSingleItemAsync();
 				if(_captureItem == null) {
 					return;
@@ -146,7 +171,7 @@ namespace ScreenCaptureVideoWPF {
 
 			}
 			catch(Exception ex) {
-
+				
 				return;
 			}
 		}
@@ -299,9 +324,10 @@ namespace ScreenCaptureVideoWPF {
 			_currentFrame?.Dispose();
 		}
 
-		private void StartCaptureButton_Click(object sender, RoutedEventArgs e) {
+		private async void StartCaptureButton_Click(object sender, RoutedEventArgs e) {
 			// TODO: make it work with button
-			//StartCapture();
+
+			await SetupEncoding();
 		}
 		private void StopCaptureButton_Click(object sender, RoutedEventArgs e) {
 			StopCapture();

@@ -40,13 +40,13 @@
       <HintPath>lib\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="SharpDX">
-      <HintPath>..\ShOC_Stalker\lib\SharpDX.dll</HintPath>
+      <HintPath>lib\SharpDX.dll</HintPath>
     </Reference>
     <Reference Include="SharpDX.Direct3D11">
-      <HintPath>..\ShOC_Stalker\lib\SharpDX.Direct3D11.dll</HintPath>
+      <HintPath>lib\SharpDX.Direct3D11.dll</HintPath>
     </Reference>
     <Reference Include="SharpDX.DXGI">
-      <HintPath>..\ShOC_Stalker\lib\SharpDX.DXGI.dll</HintPath>
+      <HintPath>lib\SharpDX.DXGI.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
@@ -69,7 +69,7 @@
       <RequiredTargetFramework>4.0</RequiredTargetFramework>
     </Reference>
     <Reference Include="Windows">
-      <HintPath>..\ScreenCaptureVideo\lib\Windows.winmd</HintPath>
+      <HintPath>lib\Windows.winmd</HintPath>
     </Reference>
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />

@@ -20,6 +20,108 @@ using System.Numerics;
 using Windows.Foundation;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Graphics.Capture;
+using Windows.System;
+
+public static class CoreMessagingHelper {
+	enum DISPATCHERQUEUE_THREAD_APARTMENTTYPE {
+		DQTAT_COM_NONE = 0,
+		DQTAT_COM_ASTA = 1,
+		DQTAT_COM_STA = 2
+	}
+
+	enum DISPATCHERQUEUE_THREAD_TYPE {
+		DQTYPE_THREAD_DEDICATED = 1,
+		DQTYPE_THREAD_CURRENT = 2
+	}
+
+	struct DispatcherQueueOptions {
+		public int dwSize;
+		public DISPATCHERQUEUE_THREAD_TYPE threadType;
+		public DISPATCHERQUEUE_THREAD_APARTMENTTYPE apartmentType;
+	}
+
+	[DllImport(
+		"CoreMessaging.dll",
+		EntryPoint = "CreateDispatcherQueueController",
+		SetLastError = true,
+		CharSet = CharSet.Unicode,
+		ExactSpelling = true,
+		CallingConvention = CallingConvention.StdCall
+		)]
+	static extern UInt32 CreateDispatcherQueueController(DispatcherQueueOptions options, out IntPtr dispatcherQueueController);
+
+	public static DispatcherQueueController CreateDispatcherQueueControllerForCurrentThread() {
+		var options = new DispatcherQueueOptions {
+			dwSize = Marshal.SizeOf<DispatcherQueueOptions>(),
+			threadType = DISPATCHERQUEUE_THREAD_TYPE.DQTYPE_THREAD_CURRENT,
+			apartmentType = DISPATCHERQUEUE_THREAD_APARTMENTTYPE.DQTAT_COM_NONE
+		};
+
+		DispatcherQueueController controller = null;
+		uint hr = CreateDispatcherQueueController(options, out IntPtr controllerPointer);
+		if(hr == 0) {
+			controller = Marshal.GetObjectForIUnknown(controllerPointer) as DispatcherQueueController;
+			Marshal.Release(controllerPointer);
+		}
+
+		return controller;
+	}
+}
+
+public static class CaptureHelper {
+	static readonly Guid GraphicsCaptureItemGuid = new Guid("79C3F95B-31F7-4EC2-A464-632EF5D30760");
+
+	[ComImport]
+	[Guid("3E68D4BD-7135-4D10-8018-9FB6D9F33FA1")]
+	[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+	[ComVisible(true)]
+	interface IInitializeWithWindow {
+		void Initialize(
+			IntPtr hwnd);
+	}
+
+	[ComImport]
+	[Guid("3628E81B-3CAC-4C60-B7F4-23CE0E0C3356")]
+	[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+	[ComVisible(true)]
+	interface IGraphicsCaptureItemInterop {
+		IntPtr CreateForWindow(
+			[In] IntPtr window,
+			[In] ref Guid iid);
+
+		IntPtr CreateForMonitor(
+			[In] IntPtr monitor,
+			[In] ref Guid iid);
+	}
+
+	public static void SetWindow(this GraphicsCapturePicker picker, IntPtr hwnd) {
+		var interop = (IInitializeWithWindow) (object) picker;
+		interop.Initialize(hwnd);
+	}
+
+	public static GraphicsCaptureItem CreateItemForWindow(IntPtr hwnd) {
+		var factory = WindowsRuntimeMarshal.GetActivationFactory(typeof(GraphicsCaptureItem));
+		var interop = (IGraphicsCaptureItemInterop) factory;
+		var temp = typeof(GraphicsCaptureItem);
+		var itemPointer = interop.CreateForWindow(hwnd, GraphicsCaptureItemGuid);
+		var item = Marshal.GetObjectForIUnknown(itemPointer) as GraphicsCaptureItem;
+		Marshal.Release(itemPointer);
+
+		return item;
+	}
+
+	public static GraphicsCaptureItem CreateItemForMonitor(IntPtr hmon) {
+		var factory = WindowsRuntimeMarshal.GetActivationFactory(typeof(GraphicsCaptureItem));
+		var interop = (IGraphicsCaptureItemInterop) factory;
+		var temp = typeof(GraphicsCaptureItem);
+		var itemPointer = interop.CreateForMonitor(hmon, GraphicsCaptureItemGuid);
+		var item = Marshal.GetObjectForIUnknown(itemPointer) as GraphicsCaptureItem;
+		Marshal.Release(itemPointer);
+
+		return item;
+	}
+}
+
 
 [ComImport]
 [Guid("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1")]
