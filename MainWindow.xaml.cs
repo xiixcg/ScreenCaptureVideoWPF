@@ -28,11 +28,13 @@ namespace ScreenCaptureVideoWPF {
 		private GraphicsCaptureSession _session;
 
 		// Non-API related members.
+		private IntPtr _hwnd;
 		private CompositionGraphicsDevice _compositionGraphicsDevice;
 		private Compositor _compositor;
+		private CompositionTarget _target;
 		private CompositionDrawingSurface _surface;
 
-		private IntPtr hwnd;
+
 		private IDirect3DDevice _device;
 		private Device _sharpDxD3dDevice;
 		private List<GraphicsCaptureItem> _captureItems;
@@ -63,36 +65,9 @@ namespace ScreenCaptureVideoWPF {
 		}
 
 		private void Window_Loaded(object sender, RoutedEventArgs e) {
-			CoreMessagingHelper.CreateDispatcherQueueControllerForCurrentThread();
 			var interopWindow = new WindowInteropHelper(this);
-			hwnd = interopWindow.Handle;
-			var presentationSource = PresentationSource.FromVisual(this);
-			double dpiX = 1.0;
-			double dpiY = 1.0;
-			if(presentationSource != null) {
-				dpiX = presentationSource.CompositionTarget.TransformToDevice.M11;
-				dpiY = presentationSource.CompositionTarget.TransformToDevice.M22;
-			}
-			var controlsWidth = (float) (ControlsGrid.ActualWidth * dpiX);
-
-			//InitComposition(controlsWidth);
-			//InitWindowList();
-			//InitMonitorList();
+			_hwnd = interopWindow.Handle;
 		}
-
-		//// TODO: having trouble getting monitors due to comimport issue with UWP
-		//private List<GraphicsCaptureItem> getAllMonitorsAsItemsToCapture() {
-		//	List<GraphicsCaptureItem> graphicCaptureItems = new List<GraphicsCaptureItem>();
-		//	foreach(MonitorInfo monitor in MonitorEnumerationHelper.GetMonitors()) {
-		//		GraphicsCaptureItem item = GraphicsCaptureHelper.CreateItemForMonitor(monitor.Hmon
-		//			);
-		//		if(item == null)
-		//			continue;
-		//		graphicCaptureItems.Add(item);
-		//	}
-
-		//	return graphicCaptureItems;
-		//}
 
 		private async Task SetupEncoding() {
 			if(!GraphicsCaptureSession.IsSupported()) {
@@ -111,7 +86,7 @@ namespace ScreenCaptureVideoWPF {
 			try {
 				//Let the user pick an item to capture
 				var picker = new GraphicsCapturePicker();
-				picker.SetWindow(hwnd);
+				picker.SetWindow(_hwnd);
 				_captureItem = await picker.PickSingleItemAsync();
 				if(_captureItem == null) {
 					return;
@@ -325,8 +300,6 @@ namespace ScreenCaptureVideoWPF {
 		}
 
 		private async void StartCaptureButton_Click(object sender, RoutedEventArgs e) {
-			// TODO: make it work with button
-
 			await SetupEncoding();
 		}
 		private void StopCaptureButton_Click(object sender, RoutedEventArgs e) {
