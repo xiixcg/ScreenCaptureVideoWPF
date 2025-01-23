@@ -15,6 +15,12 @@ using System.Threading;
 using Windows.Storage;
 using Windows.Storage.Streams;
 using System.Windows.Interop;
+using System.Security.Policy;
+using SharpDX.DXGI;
+using Device = SharpDX.Direct3D11.Device;
+using System.IO;
+using Windows.Graphics.Imaging;
+using System.Text;
 
 namespace ScreenCaptureVideoWPF {
 	/// <summary>
@@ -46,12 +52,21 @@ namespace ScreenCaptureVideoWPF {
 		private MediaStreamSource _mediaStreamSource;
 		private MediaTranscoder _transcoder;
 		private bool _isRecording;
-		private bool _closed;
+		private bool _isClosed;	// Flag for video file open for encoding
 		private Multithread _multithread;
 		private ManualResetEvent _frameEvent;
 		private ManualResetEvent _closedEvent;
 		private ManualResetEvent[] _events;
 		private Direct3D11CaptureFrame _currentFrame;
+
+		// variables for saving screenshot
+		private Texture2D _cpuTexture;
+		private bool _shouldSaveScreenshot;
+		private long _currentSaveFrameTime;
+		public string _captureItemDisplayName;
+
+		//Config variables
+		private string _filePath = $@"C:\temp\";
 
 		public MainWindow() {
 			InitializeComponent();
@@ -60,12 +75,12 @@ namespace ScreenCaptureVideoWPF {
 			}
 
 			// Force graphicscapture.dll to load.
-			var picker = new GraphicsCapturePicker();
+			GraphicsCapturePicker picker = new GraphicsCapturePicker();
 			//Task setup = SetupEncoding();
 		}
 
 		private void Window_Loaded(object sender, RoutedEventArgs e) {
-			var interopWindow = new WindowInteropHelper(this);
+			WindowInteropHelper interopWindow = new WindowInteropHelper(this);
 			_hwnd = interopWindow.Handle;
 		}
 
@@ -85,28 +100,35 @@ namespace ScreenCaptureVideoWPF {
 
 			try {
 				//Let the user pick an item to capture
-				var picker = new GraphicsCapturePicker();
+				GraphicsCapturePicker picker = new GraphicsCapturePicker();
 				picker.SetWindow(_hwnd);
 				_captureItem = await picker.PickSingleItemAsync();
 				if(_captureItem == null) {
 					return;
 				}
 
+				// TODO: change to monior recording and use displayname
+				//_captureItemDisplayName = _captureItem.DisplayName;
+				_captureItemDisplayName = "screenshot";
+
 				// Initialize a blank texture and render target view for copying frames, using the same size as the capture item
 				_composeTexture = Direct3D11Helpers.InitializeComposeTexture(_sharpDxD3dDevice, _captureItem.Size);
 				_composeRenderTargetView = new SharpDX.Direct3D11.RenderTargetView(_sharpDxD3dDevice, _composeTexture);
 
+
+				_cpuTexture = CreateTexture2D(_captureItem.Size.Width, _captureItem.Size.Height);
+
 				// This example encodes video using the item's actual size.
-				var width = (uint) _captureItem.Size.Width;
-				var height = (uint) _captureItem.Size.Height;
+				uint width = (uint) _captureItem.Size.Width;
+				uint height = (uint) _captureItem.Size.Height;
 
 				// Make sure the dimensions are are even. Required by some encoders.
 				width = (width % 2 == 0) ? width : width + 1;
 				height = (height % 2 == 0) ? height : height + 1;
 
 
-				var temp = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD1080p);
-				var bitrate = temp.Video.Bitrate;
+				MediaEncodingProfile temp = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD1080p);
+				uint bitrate = temp.Video.Bitrate;
 				uint framerate = 30;
 
 				_encodingProfile = new MediaEncodingProfile();
@@ -120,7 +142,7 @@ namespace ScreenCaptureVideoWPF {
 				_encodingProfile.Video.PixelAspectRatio.Numerator = 1;
 				_encodingProfile.Video.PixelAspectRatio.Denominator = 1;
 
-				var videoProperties = VideoEncodingProperties.CreateUncompressed(MediaEncodingSubtypes.Bgra8, width, height);
+				VideoEncodingProperties videoProperties = VideoEncodingProperties.CreateUncompressed(MediaEncodingSubtypes.Bgra8, width, height);
 				_videoDescriptor = new VideoStreamDescriptor(videoProperties);
 
 				// Create our MediaStreamSource
@@ -135,38 +157,43 @@ namespace ScreenCaptureVideoWPF {
 
 
 				// Create a destination file - Access to the VideosLibrary requires the "Videos Library" capability
-				var folder = KnownFolders.SavedPictures;
+				StorageFolder folder = KnownFolders.SavedPictures;
 				//var folder = KnownFolders.VideosLibrary;
-				var name = DateTime.Now.ToString("yyyyMMddHHmmss");
-				var file = await folder.CreateFileAsync($"{name}.mp4");
+				string name = DateTime.Now.ToString("yyyyMMddHHmmss");
+				StorageFile file = await folder.CreateFileAsync($"{name}.mp4");
 
-				using(var stream = await file.OpenAsync(FileAccessMode.ReadWrite))
-
+				using(IRandomAccessStream stream = await file.OpenAsync(FileAccessMode.ReadWrite)) {
+					_isClosed = false;
 					await EncodeAsync(stream);
+				}
+
 
 			}
 			catch(Exception ex) {
-				
+				MessageBox.Show($@"Error Message: {ex.Message}
+									Inner Exception: {ex.InnerException}");
 				return;
 			}
 		}
 
 		private async Task EncodeAsync(IRandomAccessStream stream) {
-			while(!_isRecording) {
+			while(!_isRecording && !_isClosed) {
 				_isRecording = true;
 
 				StartCapture();
 
-				var transcode = await _transcoder.PrepareMediaStreamSourceTranscodeAsync(_mediaStreamSource, stream, _encodingProfile);
+				PrepareTranscodeResult transcode = await _transcoder.PrepareMediaStreamSourceTranscodeAsync(_mediaStreamSource, stream, _encodingProfile);
 
 				await transcode.TranscodeAsync();
 			}
+			// isn't really being used for anything but will keep it for now
+			_isRecording = false;
 		}
 
 		private void OnMediaStreamSourceSampleRequested(MediaStreamSource sender, MediaStreamSourceSampleRequestedEventArgs args) {
-			if(_isRecording && !_closed) {
+			if(_isRecording && !_isClosed) {
 				try {
-					using(var frame = WaitForNewFrame()) {
+					using(SurfaceWithInfo frame = WaitForNewFrame()) {
 						if(frame == null) {
 							args.Request.Sample = null;
 							StopCapture();
@@ -174,9 +201,9 @@ namespace ScreenCaptureVideoWPF {
 							return;
 						}
 
-						var timeStamp = frame.SystemRelativeTime;
+						TimeSpan timeStamp = frame.SystemRelativeTime;
 
-						var sample = MediaStreamSample.CreateFromDirect3D11Surface(frame.Surface, timeStamp);
+						MediaStreamSample sample = MediaStreamSample.CreateFromDirect3D11Surface(frame.Surface, timeStamp);
 						args.Request.Sample = sample;
 					}
 				}
@@ -197,7 +224,7 @@ namespace ScreenCaptureVideoWPF {
 		}
 
 		private void OnMediaStreamSourceStarting(MediaStreamSource sender, MediaStreamSourceStartingEventArgs args) {
-			using(var frame = WaitForNewFrame()) {
+			using(SurfaceWithInfo frame = WaitForNewFrame()) {
 				args.Request.SetActualStartPosition(frame.SystemRelativeTime);
 			}
 		}
@@ -235,37 +262,98 @@ namespace ScreenCaptureVideoWPF {
 			_currentFrame?.Dispose();
 			_frameEvent.Reset();
 
-			var signaledEvent = _events[WaitHandle.WaitAny(_events)];
+			ManualResetEvent signaledEvent = _events[WaitHandle.WaitAny(_events)];
 			if(signaledEvent == _closedEvent) {
 				Cleanup();
 				return null;
 			}
 
-			var result = new SurfaceWithInfo();
+			SurfaceWithInfo result = new SurfaceWithInfo();
 			result.SystemRelativeTime = _currentFrame.SystemRelativeTime;
-			using(var multithreadLock = new MultithreadLock(_multithread))
-			using(var sourceTexture = Direct3D11Helpers.CreateSharpDXTexture2D(_currentFrame.Surface)) {
+			using(MultithreadLock multithreadLock = new MultithreadLock(_multithread))
+			using(Texture2D sourceTexture = Direct3D11Helpers.CreateSharpDXTexture2D(_currentFrame.Surface)) {
+
+				// This is to save current texture for saving it to screenshot
+				// copy the DirectX resource into the CPU-readable texture2D
+				_sharpDxD3dDevice.ImmediateContext.CopyResource(sourceTexture, _cpuTexture);
 
 				_sharpDxD3dDevice.ImmediateContext.ClearRenderTargetView(_composeRenderTargetView, new SharpDX.Mathematics.Interop.RawColor4(0, 0, 0, 1));
 
-				var width = MathClamp(_currentFrame.ContentSize.Width, 0, _currentFrame.Surface.Description.Width);
-				var height = MathClamp(_currentFrame.ContentSize.Height, 0, _currentFrame.Surface.Description.Height);
-				var region = new SharpDX.Direct3D11.ResourceRegion(0, 0, 0, width, height, 1);
+				int width = MathClamp(_currentFrame.ContentSize.Width, 0, _currentFrame.Surface.Description.Width);
+				int height = MathClamp(_currentFrame.ContentSize.Height, 0, _currentFrame.Surface.Description.Height);
+				ResourceRegion region = new SharpDX.Direct3D11.ResourceRegion(0, 0, 0, width, height, 1);
 				_sharpDxD3dDevice.ImmediateContext.CopySubresourceRegion(sourceTexture, 0, region, _composeTexture, 0);
 
-				var description = sourceTexture.Description;
+				Texture2DDescription description = sourceTexture.Description;
 				description.Usage = SharpDX.Direct3D11.ResourceUsage.Default;
 				description.BindFlags = SharpDX.Direct3D11.BindFlags.ShaderResource | SharpDX.Direct3D11.BindFlags.RenderTarget;
 				description.CpuAccessFlags = SharpDX.Direct3D11.CpuAccessFlags.None;
 				description.OptionFlags = SharpDX.Direct3D11.ResourceOptionFlags.None;
 
-				using(var copyTexture = new SharpDX.Direct3D11.Texture2D(_sharpDxD3dDevice, description)) {
+				using(Texture2D copyTexture = new SharpDX.Direct3D11.Texture2D(_sharpDxD3dDevice, description)) {
+
 					_sharpDxD3dDevice.ImmediateContext.CopyResource(_composeTexture, copyTexture);
 					result.Surface = Direct3D11Helpers.CreateDirect3DSurfaceFromSharpDXTexture(copyTexture);
 				}
 			}
 
 			return result;
+		}
+
+		private Texture2D CreateTexture2D(int width, int height) {
+			// create add texture2D 2D accessible by the CPU
+			Texture2DDescription desc = new Texture2DDescription() {
+				Width = width,
+				Height = height,
+				CpuAccessFlags = CpuAccessFlags.Read,
+				Usage = ResourceUsage.Staging,
+				Format = Format.B8G8R8A8_UNorm,
+				ArraySize = 1,
+				MipLevels = 1,
+				SampleDescription = new SampleDescription(1, 0),
+			};
+			return new Texture2D(_sharpDxD3dDevice, desc);
+		}
+
+		/// <summary>
+		/// Create screenshot file from current frame texture using the current unix time in milliseconds
+		/// </summary>
+		/// <param name="currentSaveFrameTime"></param>
+		private void SaveToScreenshootFromAFrameTexture(long currentSaveFrameTime) {
+			try {
+				Task.Run(async () => {
+					// now,  this is just an example that only saves the first frame
+					// but you could also use
+					// d3dDevice.ImmediateContext.MapSubresource(cpuTexture, 0, MapMode.Read, SharpDX.Direct3D11.MapFlags.None, out var stream); and d3dDevice.ImmediateContext.UnMapSubresource
+					// to get the bytes (out from the returned stream)
+
+					// get IDirect3DSurface from texture
+					IDirect3DSurface surf = Direct3D11Helpers.CreateDirect3DSurfaceFromSharpDXTexture(_cpuTexture);
+
+					// build a WinRT's SoftwareBitmap from this surface/texture
+					SoftwareBitmap softwareBitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(surf);
+
+					// Set the directory to save file and create if directory isn't there
+					// TODO: _item.DisplayName get error "The application called an interface that was marshalled for a different thread."
+					//string screenshotFileName = _filePath + _currentSaveFrameTime.ToString() + "_" + _item.DisplayName + @".png";
+					string screenshotFileName = _filePath + currentSaveFrameTime.ToString() + "_" + _captureItemDisplayName + ".png";
+
+					using(FileStream file = new FileStream(screenshotFileName, FileMode.Create, FileAccess.Write)) {
+						// create a PNG encoder
+						BitmapEncoder encoder = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, file.AsRandomAccessStream());
+
+						// set the bitmap to it & flush
+						encoder.SetSoftwareBitmap(softwareBitmap);
+						await encoder.FlushAsync();
+						return;
+					}
+				});				
+			}
+			catch(Exception ex) {
+				MessageBox.Show($@"Error Message: {ex.Message}
+									Inner Exception: {ex.InnerException}");
+				return;
+			}
 		}
 
 		/// <summary>
@@ -297,13 +385,25 @@ namespace ScreenCaptureVideoWPF {
 			_composeRenderTargetView?.Dispose();
 			_composeRenderTargetView = null;
 			_currentFrame?.Dispose();
+			_isRecording = false;
 		}
 
-		private async void StartCaptureButton_Click(object sender, RoutedEventArgs e) {
+		private async void StartCaptureButton_ClickAsync(object sender, RoutedEventArgs e) {
 			await SetupEncoding();
 		}
+
 		private void StopCaptureButton_Click(object sender, RoutedEventArgs e) {
-			StopCapture();
+			_isClosed = true;
+		}
+
+		private void TakeScreenshotButton_Click(object sender, RoutedEventArgs e) {
+			if(_cpuTexture == null) {
+				MessageBox.Show("Video recording is not on. Cannot take screenshot.");
+				return;
+			}
+			_shouldSaveScreenshot = true;
+			_currentSaveFrameTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+			SaveToScreenshootFromAFrameTexture(_currentSaveFrameTime);
 		}
 	}
 }
