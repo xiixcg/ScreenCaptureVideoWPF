@@ -52,7 +52,7 @@ namespace ScreenCaptureVideoWPF {
 		private MediaStreamSource _mediaStreamSource;
 		private MediaTranscoder _transcoder;
 		private bool _isRecording;
-		private bool _isClosed;	// Flag for video file open for encoding
+		private bool _isClosed = true;	// Flag for video file open for encoding
 		private Multithread _multithread;
 		private ManualResetEvent _frameEvent;
 		private ManualResetEvent _closedEvent;
@@ -157,7 +157,7 @@ namespace ScreenCaptureVideoWPF {
 
 
 				// Create a destination file - Access to the VideosLibrary requires the "Videos Library" capability
-				StorageFolder folder = KnownFolders.SavedPictures;
+				StorageFolder folder = await StorageFolder.GetFolderFromPathAsync(_filePath);
 				//var folder = KnownFolders.VideosLibrary;
 				string name = DateTime.Now.ToString("yyyyMMddHHmmss");
 				StorageFile file = await folder.CreateFileAsync($"{name}.mp4");
@@ -389,10 +389,20 @@ namespace ScreenCaptureVideoWPF {
 		}
 
 		private async void StartCaptureButton_ClickAsync(object sender, RoutedEventArgs e) {
+			if (!_isClosed) {
+				// TODO: Implement multiple recordings on different windows
+				MessageBox.Show("Recording already on. Need to stop one before starting one");
+				return;
+			}
 			await SetupEncoding();
 		}
 
 		private void StopCaptureButton_Click(object sender, RoutedEventArgs e) {
+			if(_isClosed) {
+				// TODO: Implement multiple recordings on different windows
+				MessageBox.Show("Recording already off. Need to start one before stopping");
+				return;
+			}
 			_isClosed = true;
 		}
 
