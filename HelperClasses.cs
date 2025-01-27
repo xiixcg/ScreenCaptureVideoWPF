@@ -281,3 +281,20 @@ public static class MonitorEnumerationHelper {
 		return result;
 	}
 }
+
+public static class Utils {
+	public static string GetEpochTimeNow() {
+		return new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds().ToString();
+	}
+
+	/// <summary>
+	/// Returns value clamped to the inclusive range of min and max.
+	/// </summary>
+	/// <param name="value"></param>
+	/// <param name="min"></param>
+	/// <param name="max"></param>
+	/// <returns> min if value less than min. max if value more than max. Else, value </returns>
+	private static int MathClamp(int value, int min, int max) {
+		return (value < min) ? min : ((value > max) ? max : value);
+	}
+}
