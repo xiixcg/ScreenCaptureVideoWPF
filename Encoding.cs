@@ -26,7 +26,7 @@ namespace ScreenCaptureVideoWPF {
 		private string _captureItemDisplayName;
 		private Texture2D _composeTexture;
 		private RenderTargetView _composeRenderTargetView;
-		private Texture2D _cpuTexture;
+		private Texture2D _cpuTexture;     
 		private int _width;
 		private int _height;
 		private uint _evenUWidth;
@@ -35,10 +35,19 @@ namespace ScreenCaptureVideoWPF {
 		private VideoStreamDescriptor _videoDescriptor;
 		private MediaStreamSource _mediaStreamSource;
 		private MediaTranscoder _transcoder;
+
 		private StorageFolder _videoFilePath;
 		private StorageFolder _imageFilePath;
 		private string _videoFileName;
 		private string _imageFileName;
+
+		private Multithread _multithread;
+		private ManualResetEvent _frameEvent;
+		private ManualResetEvent _closedEvent;
+		private ManualResetEvent[] _events;
+		private Direct3D11CaptureFrame _currentFrame;
+		private Direct3D11CaptureFramePool _framePool;
+		private GraphicsCaptureSession _session;
 
 		// Flags to control video capture status
 		private bool _isRecording;
@@ -51,6 +60,7 @@ namespace ScreenCaptureVideoWPF {
 			_captureItem = item;
 			//_captureItemDisplayName = _captureItem.DisplayName;
 			_captureItemDisplayName = "screenshot";
+
 			// Initialize a blank texture and render target view for copying frames, using the same size as the capture item
 			_composeTexture = Direct3D11Helpers.InitializeComposeTexture(_sharpDxD3dDevice, _captureItem.Size);
 			_composeRenderTargetView = new SharpDX.Direct3D11.RenderTargetView(_sharpDxD3dDevice, _composeTexture);
@@ -88,8 +98,6 @@ namespace ScreenCaptureVideoWPF {
 			// Create our MediaStreamSource
 			_mediaStreamSource = new MediaStreamSource(_videoDescriptor);
 			_mediaStreamSource.BufferTime = TimeSpan.FromSeconds(0);
-			_mediaStreamSource.Starting += OnMediaStreamSourceStarting;
-			_mediaStreamSource.SampleRequested += OnMediaStreamSourceSampleRequested;
 
 			// Create our transcoder
 			_transcoder = new MediaTranscoder();
@@ -167,7 +175,7 @@ namespace ScreenCaptureVideoWPF {
 				_sharpDxD3dDevice.ImmediateContext.ClearRenderTargetView(_composeRenderTargetView, new SharpDX.Mathematics.Interop.RawColor4(0, 0, 0, 1));
 
 				int width = Utils.MathClamp(_currentFrame.ContentSize.Width, 0, _currentFrame.Surface.Description.Width);
-				int height = MathClamp(_currentFrame.ContentSize.Height, 0, _currentFrame.Surface.Description.Height);
+				int height = Utils.MathClamp(_currentFrame.ContentSize.Height, 0, _currentFrame.Surface.Description.Height);
 				ResourceRegion region = new SharpDX.Direct3D11.ResourceRegion(0, 0, 0, width, height, 1);
 				_sharpDxD3dDevice.ImmediateContext.CopySubresourceRegion(sourceTexture, 0, region, _composeTexture, 0);
 
@@ -193,12 +201,13 @@ namespace ScreenCaptureVideoWPF {
 			}
 		}
 
-		public async void SetVideoFilePath(string videoFilePath) {
-			await StorageFolder.GetFolderFromPathAsync(videoFilePath);
+		public async Task<StorageFolder> SetVideoFilePath(string videoFilePath) {
+			_videoFilePath = await StorageFolder.GetFolderFromPathAsync(videoFilePath);
+			return _videoFilePath;
 		}
 
 		public async void SetImageFilePath(string imageFilePath) {
-			await StorageFolder.GetFolderFromPathAsync(imageFilePath);
+			_imageFilePath = await StorageFolder.GetFolderFromPathAsync(imageFilePath);
 		}
 
 		public void SetVideoFileName() {
@@ -219,7 +228,8 @@ namespace ScreenCaptureVideoWPF {
 			_imageFileName = imageFileName;
 		}
 
-		public async void startVideoCapture() {
+		public async void startVideoCapture(string videoFilePath) {
+			await SetVideoFilePath(videoFilePath);
 			SetVideoFileName();
 			StorageFile file = await _videoFilePath.CreateFileAsync($"{_videoFileName}.mp4");
 
@@ -250,6 +260,9 @@ namespace ScreenCaptureVideoWPF {
 			_closedEvent = new ManualResetEvent(false);
 			_events = new[] { _closedEvent, _frameEvent };
 
+			_mediaStreamSource.Starting += OnMediaStreamSourceStarting;
+			_mediaStreamSource.SampleRequested += OnMediaStreamSourceSampleRequested;
+
 			_captureItem.Closed += OnClosed;
 			_framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
 				_device,
@@ -259,6 +272,48 @@ namespace ScreenCaptureVideoWPF {
 			_framePool.FrameArrived += OnFrameArrived;
 			_session = _framePool.CreateCaptureSession(_captureItem);
 			_session.StartCapture();
+		}
+
+		private void OnFrameArrived(Direct3D11CaptureFramePool sender, object args) {
+			_currentFrame = sender.TryGetNextFrame();
+			_frameEvent.Set();
+		}
+
+		private void OnClosed(GraphicsCaptureItem sender, object args) {
+			_closedEvent.Set();
+		}
+
+		public void StopVideoCapture() {
+			_isClosed = true;
+		}
+
+		private void StopCapture() {
+			_closedEvent.Set();
+		}
+
+		private void Cleanup() {
+			_framePool?.Dispose();
+			_session?.Dispose();
+			if(_captureItem != null) {
+				_captureItem.Closed -= OnClosed;
+			}
+			_captureItem = null;
+			_device = null;
+			_sharpDxD3dDevice = null;
+			_composeTexture?.Dispose();
+			_composeTexture = null;
+			_composeRenderTargetView?.Dispose();
+			_composeRenderTargetView = null;
+			_currentFrame?.Dispose();
+			_isRecording = false;
+		}
+
+		public bool GetIsClosed() {
+			return this._isClosed;
+		}
+
+		public void SetIsClosed(bool isClosed) {
+			this._isClosed = isClosed;
 		}
 	}
 }
