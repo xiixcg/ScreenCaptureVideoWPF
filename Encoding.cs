@@ -343,7 +343,7 @@ namespace ScreenCaptureVideoWPF {
 				// Set the directory to save file and create if directory isn't there
 				// TODO: _item.DisplayName get error "The application called an interface that was marshalled for a different thread."
 				//string screenshotFileName = _filePath + _currentSaveFrameTime.ToString() + "_" + _item.DisplayName + @".png";
-				string screenshotFileName = $@"{_imageFilePath.Path}{_imageFileName.ToString()}{_captureItemDisplayName}.png";
+				string screenshotFileName = $@"{_imageFilePath.Path}\{_imageFileName.ToString()}{_captureItemDisplayName}.png";
 
 				using(FileStream file = new FileStream(screenshotFileName, FileMode.Create, FileAccess.Write)) {
 					// create a PNG encoder
