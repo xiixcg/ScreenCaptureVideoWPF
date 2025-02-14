@@ -61,8 +61,8 @@ namespace ScreenCaptureVideoWPF {
 			_device = Direct3D11Helpers.CreateD3DDevice();
 			_sharpDxD3dDevice = Direct3D11Helpers.CreateSharpDXDevice(_device);
 			_captureItem = item;
-			//_captureItemDisplayName = _captureItem.DisplayName;
-			_captureItemDisplayName = "screenshot";
+			_captureItemDisplayName = _captureItem.DisplayName;
+			//_captureItemDisplayName = "screenshot";
 
 			// Initialize a blank texture and render target view for copying frames, using the same size as the capture item
 			_composeTexture = Direct3D11Helpers.InitializeComposeTexture(_sharpDxD3dDevice, _captureItem.Size);

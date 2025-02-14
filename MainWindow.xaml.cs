@@ -38,8 +38,10 @@ namespace ScreenCaptureVideoWPF {
 		private CompositionTarget _target;
 		private CompositionDrawingSurface _surface;
 
-		private GraphicsCaptureItem _captureItem;
-		private Encoding _encodingItem;
+		private List<GraphicsCaptureItem> _captureItems;
+		//private GraphicsCaptureItem _captureItem;
+		private List<Encoding> _encodingItems;
+		//private Encoding _encodingItem;
 		
 		// variables for saving screenshot
 		private Texture2D _cpuTexture;
@@ -68,21 +70,25 @@ namespace ScreenCaptureVideoWPF {
 			}
 
 			try {
-				//_captureItems = GetAllMonitorItemForCapture();
-				//if(!_captureItems.Any()) {
-				//	throw new Exception("No Item to Capture");
-				//}
-
-				//Let the user pick an item to capture
-				GraphicsCapturePicker picker = new GraphicsCapturePicker();
-				picker.SetWindow(_hwnd);
-				_captureItem = await picker.PickSingleItemAsync();
-				if(_captureItem == null) {
+				_captureItems = GetAllMonitorItemForCapture();
+				if(!_captureItems.Any()) {
 					throw new Exception("No Item to Capture");
 				}
 
-				_encodingItem = new Encoding(_captureItem); 
-				_encodingItem.startVideoCapture(_filePath);
+				//Let the user pick an item to capture
+				//GraphicsCapturePicker picker = new GraphicsCapturePicker();
+				//picker.SetWindow(_hwnd);
+				//_captureItem = await picker.PickSingleItemAsync();
+				//if(_captureItem == null) {
+				//	throw new Exception("No Item to Capture");
+				//}
+				foreach(GraphicsCaptureItem captureItem in _captureItems) {
+					Encoding encodingItem = new Encoding(captureItem);
+					encodingItem.startVideoCapture(_filePath);
+
+					_encodingItems.Add(encodingItem);
+					break;
+				}
 
 			}
 			catch (Exception ex) {
@@ -112,11 +118,13 @@ namespace ScreenCaptureVideoWPF {
 
 		private void StopCaptureButton_Click(object sender, RoutedEventArgs e) {
 			try {
-				if(_encodingItem == null || _encodingItem.GetIsClosed()) {
-					// TODO: Implement multiple recordings on different windows
-					throw new Exception("Recording already off. Need to start one before stopping");
+				foreach (Encoding encodingItem in _encodingItems) {
+					if(encodingItem == null || encodingItem.GetIsClosed()) {
+						// TODO: Implement multiple recordings on different windows
+						throw new Exception("Recording already off. Need to start one before stopping");
+					}
+					encodingItem.StopVideoCapture();
 				}
-				_encodingItem.StopVideoCapture();
 			}
 			catch(Exception ex) {
 				MessageBox.Show($@"Error Message: {ex.Message} 
@@ -126,10 +134,12 @@ namespace ScreenCaptureVideoWPF {
 
 		private async void TakeScreenshotButton_Click(object sender, RoutedEventArgs e) {
 			try {
-				if(_encodingItem == null) {
-					throw new Exception("Video recording is not on. Cannot take screenshot.");
+				foreach(Encoding encodingItem in _encodingItems) {
+					if(encodingItem == null) {
+						throw new Exception("Video recording is not on. Cannot take screenshot.");
+					}
+					await encodingItem.SaveScreenshotOfCurrentFrame(_filePath);
 				}
-				await _encodingItem.SaveScreenshotOfCurrentFrame(_filePath);
 			}
 			catch(Exception ex) {
 				MessageBox.Show($@"Error Message: {ex.Message} 
