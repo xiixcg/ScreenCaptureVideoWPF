@@ -43,7 +43,6 @@ namespace ScreenCaptureVideoWPF {
 		
 		// variables for saving screenshot
 		private Texture2D _cpuTexture;
-		private bool _shouldSaveScreenshot;
 		private long _currentSaveFrameTime;
 		public string _captureItemDisplayName;
 
@@ -101,47 +100,6 @@ namespace ScreenCaptureVideoWPF {
 			return monitorItems;
 		}
 
-		/// <summary>
-		/// Create screenshot file from current frame texture using the current unix time in milliseconds
-		/// </summary>
-		/// <param name="currentSaveFrameTime"></param>
-		private void SaveToScreenshootFromAFrameTexture(long currentSaveFrameTime) {
-			try {
-				Task.Run(async () => {
-					// now,  this is just an example that only saves the first frame
-					// but you could also use
-					// d3dDevice.ImmediateContext.MapSubresource(cpuTexture, 0, MapMode.Read, SharpDX.Direct3D11.MapFlags.None, out var stream); and d3dDevice.ImmediateContext.UnMapSubresource
-					// to get the bytes (out from the returned stream)
-
-					// get IDirect3DSurface from texture
-					IDirect3DSurface surf = Direct3D11Helpers.CreateDirect3DSurfaceFromSharpDXTexture(_cpuTexture);
-
-					// build a WinRT's SoftwareBitmap from this surface/texture
-					SoftwareBitmap softwareBitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(surf);
-
-					// Set the directory to save file and create if directory isn't there
-					// TODO: _item.DisplayName get error "The application called an interface that was marshalled for a different thread."
-					//string screenshotFileName = _filePath + _currentSaveFrameTime.ToString() + "_" + _item.DisplayName + @".png";
-					string screenshotFileName = _filePath + currentSaveFrameTime.ToString() + "_" + _captureItemDisplayName + ".png";
-
-					using(FileStream file = new FileStream(screenshotFileName, FileMode.Create, FileAccess.Write)) {
-						// create a PNG encoder
-						BitmapEncoder encoder = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, file.AsRandomAccessStream());
-
-						// set the bitmap to it & flush
-						encoder.SetSoftwareBitmap(softwareBitmap);
-						await encoder.FlushAsync();
-						return;
-					}
-				});				
-			}
-			catch(Exception ex) {
-				MessageBox.Show($@"Error Message: {ex.Message}
-									Inner Exception: {ex.InnerException}");
-				return;
-			}
-		}
-
 		private async void StartCaptureButton_ClickAsync(object sender, RoutedEventArgs e) {
 			try {
 				await SetupEncodingAndStartRecording();
@@ -166,14 +124,17 @@ namespace ScreenCaptureVideoWPF {
 			}
 		}
 
-		private void TakeScreenshotButton_Click(object sender, RoutedEventArgs e) {
-			if(_cpuTexture == null) {
-				MessageBox.Show("Video recording is not on. Cannot take screenshot.");
-				return;
+		private async void TakeScreenshotButton_Click(object sender, RoutedEventArgs e) {
+			try {
+				if(_encodingItem == null) {
+					throw new Exception("Video recording is not on. Cannot take screenshot.");
+				}
+				await _encodingItem.SaveScreenshotOfCurrentFrame(_filePath);
 			}
-			_shouldSaveScreenshot = true;
-			_currentSaveFrameTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
-			SaveToScreenshootFromAFrameTexture(_currentSaveFrameTime);
+			catch(Exception ex) {
+				MessageBox.Show($@"Error Message: {ex.Message} 
+								Inner Exception: {ex.InnerException}");
+			}
 		}
 	}
 }

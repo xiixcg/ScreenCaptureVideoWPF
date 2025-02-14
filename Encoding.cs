@@ -3,14 +3,17 @@ using SharpDX.DXGI;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Xml.Linq;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
+using Windows.Graphics.Imaging;
 using Windows.Media.Core;
 using Windows.Media.MediaProperties;
 using Windows.Media.Transcoding;
@@ -206,8 +209,9 @@ namespace ScreenCaptureVideoWPF {
 			return _videoFilePath;
 		}
 
-		public async void SetImageFilePath(string imageFilePath) {
+		public async Task<StorageFolder> SetImageFilePath(string imageFilePath) {
 			_imageFilePath = await StorageFolder.GetFolderFromPathAsync(imageFilePath);
+			return _imageFilePath;
 		}
 
 		public void SetVideoFileName() {
@@ -314,6 +318,43 @@ namespace ScreenCaptureVideoWPF {
 
 		public void SetIsClosed(bool isClosed) {
 			this._isClosed = isClosed;
+		}
+
+
+		/// <summary>
+		/// Create screenshot file from current frame texture using the current unix time in milliseconds
+		/// </summary>
+		/// <param name="currentSaveFrameTime"></param>
+		public async Task SaveScreenshotOfCurrentFrame(string imageFilePath) {
+			await SetImageFilePath(imageFilePath);
+			SetImageFileName();
+			await Task.Run(async () => {
+				// now,  this is just an example that only saves the first frame
+				// but you could also use
+				// d3dDevice.ImmediateContext.MapSubresource(cpuTexture, 0, MapMode.Read, SharpDX.Direct3D11.MapFlags.None, out var stream); and d3dDevice.ImmediateContext.UnMapSubresource
+				// to get the bytes (out from the returned stream)
+
+				// get IDirect3DSurface from texture
+				IDirect3DSurface surf = Direct3D11Helpers.CreateDirect3DSurfaceFromSharpDXTexture(_cpuTexture);
+
+				// build a WinRT's SoftwareBitmap from this surface/texture
+				SoftwareBitmap softwareBitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(surf);
+
+				// Set the directory to save file and create if directory isn't there
+				// TODO: _item.DisplayName get error "The application called an interface that was marshalled for a different thread."
+				//string screenshotFileName = _filePath + _currentSaveFrameTime.ToString() + "_" + _item.DisplayName + @".png";
+				string screenshotFileName = $@"{_imageFilePath.Path}\{_imageFileName.ToString()}{_captureItemDisplayName}.png";
+
+				using(FileStream file = new FileStream(screenshotFileName, FileMode.Create, FileAccess.Write)) {
+					// create a PNG encoder
+					BitmapEncoder encoder = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, file.AsRandomAccessStream());
+
+					// set the bitmap to it & flush
+					encoder.SetSoftwareBitmap(softwareBitmap);
+					await encoder.FlushAsync();
+					return;
+				}
+			});
 		}
 	}
 }
