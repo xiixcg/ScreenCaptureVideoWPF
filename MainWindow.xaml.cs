@@ -82,19 +82,20 @@ namespace ScreenCaptureVideoWPF {
 				//if(_captureItem == null) {
 				//	throw new Exception("No Item to Capture");
 				//}
+				_encodingItems = new List<Encoding>();
 				foreach(GraphicsCaptureItem captureItem in _captureItems) {
 					Encoding encodingItem = new Encoding(captureItem);
 					encodingItem.startVideoCapture(_filePath);
 
 					_encodingItems.Add(encodingItem);
-					break;
+					
 				}
 
 			}
 			catch (Exception ex) {
 				throw new Exception($"{ex.Message}");
 			}
-		}
+		} 
 
 		private List<GraphicsCaptureItem> GetAllMonitorItemForCapture() {
 			List<GraphicsCaptureItem> monitorItems = new List<GraphicsCaptureItem>();
@@ -114,7 +115,7 @@ namespace ScreenCaptureVideoWPF {
 				MessageBox.Show($@"Error Message: {ex.Message} 
 								Inner Exception: {ex.InnerException}");
 			}
-		}
+		}    
 
 		private void StopCaptureButton_Click(object sender, RoutedEventArgs e) {
 			try {
