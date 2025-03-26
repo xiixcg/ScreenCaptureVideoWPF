@@ -75,14 +75,17 @@ namespace ScreenCaptureVideoWPF {
 					throw new Exception("No Item to Capture");
 				}
 
-				//Let the user pick an item to capture
-				//GraphicsCapturePicker picker = new GraphicsCapturePicker();
-				//picker.SetWindow(_hwnd);
-				//_captureItem = await picker.PickSingleItemAsync();
-				//if(_captureItem == null) {
-				//	throw new Exception("No Item to Capture");
-				//}
-				_encodingItems = new List<Encoding>();
+				// Create the filePath if not existing
+				Directory.CreateDirectory(_filePath);
+
+                //Let the user pick an item to capture
+                //GraphicsCapturePicker picker = new GraphicsCapturePicker();
+                //picker.SetWindow(_hwnd);
+                //_captureItem = await picker.PickSingleItemAsync();
+                //if(_captureItem == null) {
+                //	throw new Exception("No Item to Capture");
+                //}
+                _encodingItems = new List<Encoding>();
 				foreach(GraphicsCaptureItem captureItem in _captureItems) {
 					Encoding encodingItem = new Encoding(captureItem);
 					encodingItem.startVideoCapture(_filePath);
