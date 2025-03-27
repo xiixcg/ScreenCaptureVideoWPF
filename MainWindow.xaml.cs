@@ -30,22 +30,10 @@ namespace ScreenCaptureVideoWPF {
 	/// </summary>
 	public partial class MainWindow : Window {
 		// Capture API objects.
-
-		// Non-API related members.
-		private IntPtr _hwnd;
-		private CompositionGraphicsDevice _compositionGraphicsDevice;
-		private Compositor _compositor;
-		private CompositionTarget _target;
-		private CompositionDrawingSurface _surface;
-
 		private List<GraphicsCaptureItem> _captureItems;
-		//private GraphicsCaptureItem _captureItem;
 		private List<Encoding> _encodingItems;
-		//private Encoding _encodingItem;
 		
 		// variables for saving screenshot
-		private Texture2D _cpuTexture;
-		private long _currentSaveFrameTime;
 		public string _captureItemDisplayName;
 
 		//Config variables
@@ -56,12 +44,10 @@ namespace ScreenCaptureVideoWPF {
 
 			// Force graphicscapture.dll to load.
 			GraphicsCapturePicker picker = new GraphicsCapturePicker();
-			//Task setup = SetupEncoding();
 		}
 
 		private void Window_Loaded(object sender, RoutedEventArgs e) {
 			WindowInteropHelper interopWindow = new WindowInteropHelper(this);
-			_hwnd = interopWindow.Handle;
 		}
 
 		private async Task SetupEncodingAndStartRecording() {
@@ -77,23 +63,13 @@ namespace ScreenCaptureVideoWPF {
 
 				// Create the filePath if not existing
 				Directory.CreateDirectory(_filePath);
-
-                //Let the user pick an item to capture
-                //GraphicsCapturePicker picker = new GraphicsCapturePicker();
-                //picker.SetWindow(_hwnd);
-                //_captureItem = await picker.PickSingleItemAsync();
-                //if(_captureItem == null) {
-                //	throw new Exception("No Item to Capture");
-                //}
                 _encodingItems = new List<Encoding>();
 				foreach(GraphicsCaptureItem captureItem in _captureItems) {
 					Encoding encodingItem = new Encoding(captureItem);
 					encodingItem.startVideoCapture(_filePath);
 
-					_encodingItems.Add(encodingItem);
-					
+					_encodingItems.Add(encodingItem);					
 				}
-
 			}
 			catch (Exception ex) {
 				throw new Exception($"{ex.Message}");
