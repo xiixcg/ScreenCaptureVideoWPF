@@ -1,130 +1,116 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
-using Windows.Graphics.Capture;
-using Windows.Graphics.DirectX.Direct3D11;
-using Windows.UI.Composition;
-using Windows.Graphics.DirectX;
-using SharpDX.Direct3D11;
-using Windows.Media.MediaProperties;
-using Windows.Media.Core;
-using Windows.Media.Transcoding;
-using System.Threading;
-using Windows.Storage;
-using Windows.Storage.Streams;
 using System.Windows.Interop;
-using System.Security.Policy;
-using SharpDX.DXGI;
-using Device = SharpDX.Direct3D11.Device;
-using System.IO;
-using Windows.Graphics.Imaging;
-using System.Text;
-using System.Linq;
+using Windows.Graphics.Capture;
 
 namespace ScreenCaptureVideoWPF {
-	/// <summary>
-	/// 
-	/// Interaction logic for MainWindow.xaml
-	/// </summary>
-	public partial class MainWindow : Window {
-		// Capture API objects.
-		private List<GraphicsCaptureItem> _captureItems;
-		private List<Encoding> _encodingItems;
-		
-		// variables for saving screenshot
-		public string _captureItemDisplayName;
+    /// <summary>
+    /// 
+    /// Interaction logic for MainWindow.xaml
+    /// </summary>
+    public partial class MainWindow : Window {
+        // Capture API objects.
+        private List<GraphicsCaptureItem> _captureItems;
+        private List<Encoding> _encodingItems;
 
-		//Config variables
-		private string _filePath = $@"C:\temp\";
+        // variables for saving screenshot
+        public string _captureItemDisplayName;
 
-		public MainWindow() {
-			InitializeComponent();
+        //Config variables
+        private string _filePath = $@"C:\temp\";
 
-			// Force graphicscapture.dll to load.
-			GraphicsCapturePicker picker = new GraphicsCapturePicker();
-		}
+        public MainWindow() {
+            InitializeComponent();
 
-		private void Window_Loaded(object sender, RoutedEventArgs e) {
-			WindowInteropHelper interopWindow = new WindowInteropHelper(this);
-		}
+            // Force graphicscapture.dll to load.
+            GraphicsCapturePicker picker = new GraphicsCapturePicker();
+        }
 
-		private async Task SetupEncodingAndStartRecording() {
-			if(!GraphicsCaptureSession.IsSupported()) {
-				throw new Exception("Video capture is not supported");
-			}
+        private void Window_Loaded(object sender, RoutedEventArgs e) {
+            WindowInteropHelper interopWindow = new WindowInteropHelper(this);
+        }
 
-			try {
-				_captureItems = GetAllMonitorItemForCapture();
-				if(!_captureItems.Any()) {
-					throw new Exception("No Item to Capture");
-				}
+        private async Task SetupEncodingAndStartRecording() {
+            if (!GraphicsCaptureSession.IsSupported()) {
+                throw new Exception("Video capture is not supported");
+            }
 
-				// Create the filePath if not existing
-				Directory.CreateDirectory(_filePath);
+            try {
+                _captureItems = GetAllMonitorItemForCapture();
+                if (!_captureItems.Any()) {
+                    throw new Exception("No Item to Capture");
+                }
+
+                // Create the filePath if not existing
+                Directory.CreateDirectory(_filePath);
                 _encodingItems = new List<Encoding>();
-				foreach(GraphicsCaptureItem captureItem in _captureItems) {
-					Encoding encodingItem = new Encoding(captureItem);
-					encodingItem.startVideoCapture(_filePath);
+                string videoFilePrefix = Utils.GetEpochTimeNow();
+                foreach (GraphicsCaptureItem captureItem in _captureItems) {
+                    Encoding encodingItem = new Encoding(captureItem);
+                    encodingItem.startVideoCapture(_filePath, videoFilePrefix);
 
-					_encodingItems.Add(encodingItem);					
-				}
-			}
-			catch (Exception ex) {
-				throw new Exception($"{ex.Message}");
-			}
-		} 
+                    _encodingItems.Add(encodingItem);
+                }
+            }
+            catch (Exception ex) {
+                throw new Exception($"{ex.Message}");
+            }
+        }
 
-		private List<GraphicsCaptureItem> GetAllMonitorItemForCapture() {
-			List<GraphicsCaptureItem> monitorItems = new List<GraphicsCaptureItem>();
-			foreach(MonitorInfo monitor in MonitorEnumerationHelper.GetMonitors()) {
-				GraphicsCaptureItem item = CaptureHelper.CreateItemForMonitor(monitor.Hmon);
-				monitorItems.Add(item);
-			}
+        private List<GraphicsCaptureItem> GetAllMonitorItemForCapture() {
+            List<GraphicsCaptureItem> monitorItems = new List<GraphicsCaptureItem>();
+            foreach (MonitorInfo monitor in MonitorEnumerationHelper.GetMonitors()) {
+                GraphicsCaptureItem item = CaptureHelper.CreateItemForMonitor(monitor.Hmon);
+                monitorItems.Add(item);
+            }
 
-			return monitorItems;
-		}
+            return monitorItems;
+        }
 
-		private async void StartCaptureButton_ClickAsync(object sender, RoutedEventArgs e) {
-			try {
-				await SetupEncodingAndStartRecording();
-			}
-			catch(Exception ex) {
-				MessageBox.Show($@"Error Message: {ex.Message} 
+        private async void StartCaptureButton_ClickAsync(object sender, RoutedEventArgs e) {
+            try {
+                await SetupEncodingAndStartRecording();
+            }
+            catch (Exception ex) {
+                MessageBox.Show($@"Error Message: {ex.Message} 
 								Inner Exception: {ex.InnerException}");
-			}
-		}    
+            }
+        }
 
-		private void StopCaptureButton_Click(object sender, RoutedEventArgs e) {
-			try {
-				foreach (Encoding encodingItem in _encodingItems) {
-					if(encodingItem == null || encodingItem.GetIsClosed()) {
-						// TODO: Implement multiple recordings on different windows
-						throw new Exception("Recording already off. Need to start one before stopping");
-					}
-					encodingItem.StopVideoCapture();
-				}
-			}
-			catch(Exception ex) {
-				MessageBox.Show($@"Error Message: {ex.Message} 
+        private void StopCaptureButton_Click(object sender, RoutedEventArgs e) {
+            try {
+                foreach (Encoding encodingItem in _encodingItems) {
+                    if (encodingItem == null || encodingItem.GetIsClosed()) {
+                        // TODO: Implement multiple recordings on different windows
+                        throw new Exception("Recording already off. Need to start one before stopping");
+                    }
+                    encodingItem.StopVideoCapture();
+                }
+            }
+            catch (Exception ex) {
+                MessageBox.Show($@"Error Message: {ex.Message} 
 								Inner Exception: {ex.InnerException}");
-			}
-		}
+            }
+        }
 
-		private async void TakeScreenshotButton_Click(object sender, RoutedEventArgs e) {
-			try {
-				foreach(Encoding encodingItem in _encodingItems) {
-					if(encodingItem == null) {
-						throw new Exception("Video recording is not on. Cannot take screenshot.");
-					}
-					await encodingItem.SaveScreenshotOfCurrentFrame(_filePath);
-				}
-			}
-			catch(Exception ex) {
-				MessageBox.Show($@"Error Message: {ex.Message} 
+        private async void TakeScreenshotButton_Click(object sender, RoutedEventArgs e) {
+            try {
+                string imageFilePrefix = Utils.GetEpochTimeNow();
+                foreach (Encoding encodingItem in _encodingItems) {
+                    if (encodingItem == null) {
+                        throw new Exception("Video recording is not on. Cannot take screenshot.");
+                    }
+                    await encodingItem.SaveScreenshotOfCurrentFrame(_filePath, imageFilePrefix);
+                }
+            }
+            catch (Exception ex) {
+                MessageBox.Show($@"Error Message: {ex.Message} 
 								Inner Exception: {ex.InnerException}");
-			}
-		}
-	}
+            }
+        }
+    }
 }
